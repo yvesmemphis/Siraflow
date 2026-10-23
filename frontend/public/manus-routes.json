@@ -1,0 +1,5 @@
+{
+  "routes": [
+    { "path": "/", "title": "SiraFlow — Explorateur de contrats OpenAPI" }
+  ]
+}
