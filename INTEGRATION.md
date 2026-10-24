@@ -110,13 +110,11 @@ origines CORS du mode développement. En production, les origines CORS de
 développement ne sont pas autorisées par défaut : définissez
 `DJANGO_CORS_ALLOWED_ORIGINS` explicitement.
 
-Avant une mise en production publique, remplacez la clé secrète de développement,
-désactivez `DEBUG`, définissez `ALLOWED_HOSTS`, configurez HTTPS et les cookies
-sécurisés, et faites une revue des limites de taille, du débit et des permissions.
-Les réglages sont désormais désactivés par défaut pour le mode debug ; fournissez
-une `DJANGO_SECRET_KEY` secrète et configurez explicitement `DJANGO_ALLOWED_HOSTS`,
-`DJANGO_CORS_ALLOWED_ORIGINS` et TLS avant le déploiement. Voir également le
-README à la racine du projet.
+Le backend est servi par Gunicorn en production Linux et WhiteNoise sert les
+fichiers statiques Django. Derrière Render, `DJANGO_TRUST_PROXY_SSL=true` permet à
+Django de reconnaître le HTTPS terminé par le proxy. Configurez aussi
+`DJANGO_CSRF_TRUSTED_ORIGINS` pour le domaine frontend si l'admin Django est utilisé.
+Les étapes Render/Vercel détaillées sont dans le README à la racine.
 
 ## Limites actuelles
 

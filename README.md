@@ -31,6 +31,9 @@ python manage.py migrate
 python manage.py runserver
 ```
 
+Gunicorn est le serveur de production Linux et n'est pas nécessaire pour lancer
+Django localement sous Windows.
+
 Le backend local est alors disponible à l'adresse :
 
 **http://127.0.0.1:8000/**
@@ -155,25 +158,73 @@ pnpm run build
 
 ## Préparer un dépôt GitHub public
 
-Le dossier fourni n'est pas encore un dépôt Git. Avant de publier :
+Le dépôt est déjà initialisé. Avant toute nouvelle publication :
 
 1. Choisissez une licence et ajoutez le fichier `LICENSE`. Le README ne choisit pas
    de licence à votre place.
 2. Vérifiez que `.gitignore` est bien à la racine et qu'aucun fichier de configuration
    local ou secret n'est ajouté.
-3. Initialisez Git et inspectez les fichiers avant de les pousser :
+3. Inspectez les changements et les fichiers avant de les pousser :
 
 ```powershell
-git init
 git status --short
-git add .
-git diff --cached --name-only
+git diff --check
+git diff --name-only
 ```
 
-Si un fichier sensible ou généré apparaît dans la liste, retirez-le de l'index avant
-le commit. N'ajoutez jamais `backend\env`, `backend\db.sqlite3` ou un fichier `.env`.
-Ajoutez ensuite le remote GitHub et poussez la branche principale selon les
-instructions de GitHub.
+N'ajoutez jamais `backend\env`, `backend\db.sqlite3` ou un fichier `.env`. Après
+vérification, créez un commit et poussez-le sur la branche principale.
+
+## Déployer en production (Render + Vercel)
+
+La configuration [render.yaml](./render.yaml) définit le backend Django sur
+Render. Le frontend Vite peut être déployé sur Vercel comme site statique.
+
+### 1. Déployer l'API Django sur Render
+
+1. Dans Render, créez un Blueprint à partir du dépôt GitHub et sélectionnez
+   `render.yaml`. Le service s'appelle `siraflow-api`; Render génère la clé
+   `DJANGO_SECRET_KEY` et installe les dépendances, collecte les fichiers statiques,
+   applique les migrations puis démarre Gunicorn.
+2. Une fois le service créé, notez son origine HTTPS, par exemple
+   `https://siraflow-api.onrender.com`.
+3. Le Blueprint configure déjà `DJANGO_CORS_ALLOWED_ORIGINS` et
+   `DJANGO_CSRF_TRUSTED_ORIGINS` pour `https://siraflow.vercel.app`, et
+   `DJANGO_ALLOWED_HOSTS` pour `siraflow-api.onrender.com`. Si vous choisissez un
+   autre domaine de frontend ou d'API, modifiez ces valeurs avant le déploiement
+   ou dans les variables Render.
+
+Le port Django `8000` n'est pas exposé directement : Render transmet les requêtes
+HTTPS à Gunicorn via le proxy géré par Render.
+
+### 2. Déployer le frontend sur Vercel
+
+1. Importez le même dépôt dans Vercel.
+2. Configurez le **Root Directory** sur `frontend`.
+3. Utilisez `pnpm run build` comme commande de build et `dist` comme dossier de
+   sortie. Vercel détecte normalement pnpm depuis `pnpm-lock.yaml`.
+4. Ajoutez la variable de build `VITE_API_BASE_URL` avec l'origine Render,
+   par exemple `https://siraflow-api.onrender.com`, sans `/api/` à la fin.
+5. Déployez ou redéployez après avoir ajouté la variable : les variables `VITE_*`
+   sont intégrées au frontend au moment du build.
+
+Testez ensuite l'interface et l'URL
+`https://siraflow-api.onrender.com/api/parse/` avec une requête POST. Ouvrir cette
+route depuis la barre d'adresse envoie un GET et ne valide pas l'endpoint de parsing.
+
+### Notes de production
+
+- Le fichier SQLite actuel est local/éphémère sur les offres Render usuelles.
+  L'application de parsing ne persiste pas les spécifications, mais les comptes
+  d'administration et sessions Django ne sont pas durables. Si vous ajoutez des
+  données persistantes, configurez PostgreSQL avant de les mettre en production.
+- Le limiteur DRF par défaut utilise le cache local du processus ; il n'est pas une
+  protection robuste contre les abus à grande échelle ou les instances multiples.
+  Utilisez un cache partagé ou une protection de débit fournie par le fournisseur
+  si le service devient largement public.
+- Une adresse de prévisualisation Vercel peut changer ; ajoutez chaque origine de
+  preview nécessaire aux variables CORS/CSRF, ou testez d'abord avec le domaine
+  stable de production.
 
 ## Variables de configuration
 
@@ -183,6 +234,8 @@ instructions de GitHub.
 | `DJANGO_DEBUG` | Active le mode développement uniquement avec la valeur `true`, `1` ou `yes`. Par défaut : désactivé. |
 | `DJANGO_ALLOWED_HOSTS` | Hôtes Django autorisés, séparés par des virgules. En local : `localhost,127.0.0.1`. |
 | `DJANGO_CORS_ALLOWED_ORIGINS` | Origines web autorisées, séparées par des virgules, avec schéma et port. |
+| `DJANGO_CSRF_TRUSTED_ORIGINS` | Origines fiables pour les requêtes protégées CSRF, notamment l'admin Django. |
+| `DJANGO_TRUST_PROXY_SSL` | Reconnaît `X-Forwarded-Proto: https` envoyé par le proxy de confiance. Activé par défaut hors développement ; ne l'activer que derrière un proxy qui définit ce header de façon fiable. |
 | `DJANGO_ANON_RATE` | Limite des requêtes anonymes, format DRF, par défaut `30/min`. |
 | `DJANGO_SECURE_HSTS_SECONDS` | Durée HSTS ; par défaut un an hors développement. Ne l'utiliser qu'avec HTTPS configuré. |
 | `VITE_API_BASE_URL` | Origine du backend en production si le frontend et l'API ne partagent pas le même domaine. En développement, le proxy Vite suffit. |
